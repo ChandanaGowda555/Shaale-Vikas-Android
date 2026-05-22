@@ -3,7 +3,9 @@ package com.chandana.shaalevikas
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,6 +13,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -76,13 +80,9 @@ fun SystemApplicationRouter() {
                 navigationIcon = {
                     if (navigationState != "PortalGate") {
                         IconButton(onClick = {
-                            if (navigationState == "AdminDashboard" || navigationState == "AlumniBase") {
-                                navigationState = "PortalGate"
-                            } else {
-                                navigationState = "PortalGate"
-                            }
+                            navigationState = "PortalGate"
                         }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
                         }
                     }
                 }
@@ -170,24 +170,81 @@ fun CentralLoginGateScreen(targetRole: String, onAuthSuccess: () -> Unit) {
     }
 }
 
+// Make sure to add this import at the very top of MainActivity.kt if not present:
+// import androidx.activity.compose.rememberLauncherForActivityResult
+// import androidx.activity.result.contract.ActivityResultContracts
+
+// Make sure to add this import at the very top of MainActivity.kt if not present:
+// import androidx.activity.compose.rememberLauncherForActivityResult
+// import androidx.activity.result.contract.ActivityResultContracts
+
 @Composable
 fun HeadmasterAdminScreen() {
     var inputTitle by remember { mutableStateOf("") }
     var inputDesc by remember { mutableStateOf("") }
     var inputCost by remember { mutableStateOf("") }
     var chosenPriority by remember { mutableStateOf("High") }
-    val scope = rememberCoroutineScope()
+
+    // State to hold the locally picked phone image path dynamically
+    var selectedImageUriString by remember { mutableStateOf("") }
+
     val context = LocalContext.current
+
+    // Native Android System ImagePicker API Launcher Contract
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            selectedImageUriString = it.toString()
+            Toast.makeText(context, "Photo Attached Successfully!", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("Post a School Micro-Need", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1B5E20))
         Spacer(modifier = Modifier.height(16.dp))
+
         OutlinedTextField(value = inputTitle, onValueChange = { inputTitle = it }, label = { Text("Infrastructure Requirement Title") }, modifier = Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(value = inputDesc, onValueChange = { inputDesc = it }, label = { Text("Granular Requirement Description") }, modifier = Modifier.fillMaxWidth(), maxLines = 3)
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(value = inputCost, onValueChange = { inputCost = it }, label = { Text("Estimated Structural Cost (INR)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
-        Spacer(modifier = Modifier.height(16.dp))
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // --- IMAGE PICKER CONTROLLER LAYER ---
+        Text("Evidence Documentation:", fontWeight = FontWeight.SemiBold)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = { imagePickerLauncher.launch("image/*") },
+                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Icon(Icons.Default.Share, contentDescription = null) // Pick image icon representation
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Select 'Before' Photo")
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            if (selectedImageUriString.isNotEmpty()) {
+                // Live thumbnail gallery preview right inside the form layout
+                Card(modifier = Modifier.size(50.dp), shape = RoundedCornerShape(4.dp)) {
+                    AsyncImage(
+                        model = selectedImageUriString,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            } else {
+                Text("No photo attached", fontSize = 12.sp, color = Color.Gray)
+            }
+        }
+        // -------------------------------------
+
+        Spacer(modifier = Modifier.height(12.dp))
         Text("Select Priority Level Selection:", fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             listOf("High", "Medium", "Low").forEach { level ->
@@ -197,10 +254,14 @@ fun HeadmasterAdminScreen() {
                 }
             }
         }
-        Spacer(modifier = Modifier.height(24.dp))
+
+        Spacer(modifier = Modifier.height(20.dp))
         Button(
             onClick = {
                 if (inputTitle.isNotBlank() && inputCost.isNotBlank()) {
+                    // Inject either the picked image or use fallback default asset
+                    val finalImageToPost = selectedImageUriString.ifEmpty { "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=500" }
+
                     GlobalDataEngine.operationalNeeds.add(
                         MicroNeed(
                             id = System.currentTimeMillis().toString(),
@@ -208,11 +269,12 @@ fun HeadmasterAdminScreen() {
                             description = inputDesc,
                             category = "Repair",
                             costEstimate = inputCost.toDoubleOrNull() ?: 0.0,
-                            priority = chosenPriority
+                            priority = chosenPriority,
+                            beforeImageUrl = finalImageToPost
                         )
                     )
                     Toast.makeText(context, "Micro-Need Synced into Live State Registry!", Toast.LENGTH_SHORT).show()
-                    inputTitle = ""; inputDesc = ""; inputCost = ""
+                    inputTitle = ""; inputDesc = ""; inputCost = ""; selectedImageUriString = ""
                 }
             },
             modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -227,12 +289,12 @@ fun HeadmasterAdminScreen() {
 
 @Composable
 fun AlumniTabController() {
-    var tabSelectionIndex by remember { mutableStateOf(0) }
+    var tabSelectionIndex by remember { mutableIntStateOf(0) }
 
     Scaffold(
         bottomBar = {
             NavigationBar(containerColor = Color.White) {
-                NavigationBarItem(selected = tabSelectionIndex == 0, onClick = { tabSelectionIndex = 0 }, icon = { Icon(Icons.Default.List, contentDescription = null) }, label = { Text("Needs Feed") })
+                NavigationBarItem(selected = tabSelectionIndex == 0, onClick = { tabSelectionIndex = 0 }, icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) }, label = { Text("Needs Feed") })
                 NavigationBarItem(selected = tabSelectionIndex == 1, onClick = { tabSelectionIndex = 1 }, icon = { Icon(Icons.Default.Star, contentDescription = null) }, label = { Text("Impact Visuals") })
                 NavigationBarItem(selected = tabSelectionIndex == 2, onClick = { tabSelectionIndex = 2 }, icon = { Icon(Icons.Default.AccountBox, contentDescription = null) }, label = { Text("Wall of Honor") })
             }
@@ -295,6 +357,17 @@ fun NeedDisplayCard(need: MicroNeed) {
 
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(modifier = Modifier.padding(16.dp)) {
+
+            // Render the attached dynamic image if present
+            if (need.beforeImageUrl.isNotEmpty()) {
+                AsyncImage(
+                    model = need.beforeImageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxWidth().height(100.dp).padding(bottom = 8.dp).background(Color.LightGray, RoundedCornerShape(8.dp))
+                )
+            }
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(need.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
                 Surface(color = if (need.priority == "High") Color(0xFFFFEBEE) else Color(0xFFFFF3E0), shape = RoundedCornerShape(6.dp)) {
@@ -387,7 +460,7 @@ fun DonorHallOfFameScreen() {
                     supportingContent = { Text("Target Fulfill: ${donor.supportNeed}") },
                     trailingContent = { Text("₹${donor.amount}", color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold) }
                 )
-                Divider()
+                HorizontalDivider()
             }
         }
     }

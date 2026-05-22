@@ -8,6 +8,7 @@ data class MicroNeed(
     val costEstimate: Double = 0.0,
     val priority: String = "High",
     var pledgedAmount: Double = 0.0,
+    // Supports both mock web links and dynamic local storage phone URIs
     val beforeImageUrl: String = "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=500"
 )
 
